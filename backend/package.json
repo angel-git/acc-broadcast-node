@@ -2,17 +2,17 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
-  "license": "MIT",
+  "license": "ISC",
   "scripts": {
     "start": "nodemon index.js"
   },
   "author": "",
-  "license": "ISC",
   "dependencies": {
+    "binutils": "^0.1.0",
     "express": "^4.16.4",
     "lodash": "^4.17.11",
     "socket.io": "^2.2.0",
-    "waait": "^1.0.2"
+    "utf8-bytes": "^0.0.1"
   },
   "devDependencies": {
     "nodemon": "^1.18.7"

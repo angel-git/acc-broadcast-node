@@ -1,77 +1,86 @@
 const dgram = require('dgram');
-const wait = require('waait');
 const app = require('express')();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
-const throttle = require('lodash/throttle');
-// const commandDelays = require('./commandDelays');
-const sender = require('./sender');
+const api = require('./api');
 const constants = require('./constants');
+const binutils = require('binutils');
 
 const PORT = 9000;
 const LOCAL_PORT = 9001;
 const HOST = '192.168.178.24';
 // const HOST = '127.0.0.1';
-const DISPLAY_NAME = 'your name';
+const DISPLAY_NAME = 'your';
 const CONNECTION_PASSWORD = 'asd';
 const COMMAND_PASSWORD = '';
 const onClientConnectedCallback = (callback) => {
     console.log(`I'm connected to ACC!`, callback);
 }
 
-const drone = dgram.createSocket('udp4');
-drone.bind(LOCAL_PORT);
+let browserSocket;
 
-drone.on('message', message => {
-    console.log(`🤖 : ${message}`);
+const acc = dgram.createSocket('udp4');
+acc.bind(LOCAL_PORT);
 
-    console.log(message.toString())
-    const messageType = message.readUInt8();
+acc.on('message', message => {
+    // console.log(`raw message: ${message}`);
+    const reader = new binutils.BinaryReader(message, 'little');
+    
+    const messageType = reader.ReadUInt8();
     switch(messageType) {
         case constants.InboundMessageTypes.REGISTRATION_RESULT: {
             console.log('REGISTRATION_RESULT');
-            const connectionId = message.readInt32LE();
-            const connectionSuccess = message.readInt8() > 0;
-            const isReadonly = message.readInt8() === 0;
-            const errMsg = sender.readString(message);
+            const connectionId = reader.ReadInt32();
+            const connectionSuccess = reader.ReadBytes(1).readUInt8(0) > 0;
+            const isReadonly = reader.ReadBytes(1).readUInt8(0) === 0;
+            const errMsg = api.readString(reader);
+
             console.log({connectionId, connectionSuccess, isReadonly, errMsg});
 
-            // OnConnectionStateChanged?.Invoke(ConnectionId, connectionSuccess, isReadonly, errMsg);
+            break;
+        }
+        case constants.InboundMessageTypes.REALTIME_UPDATE: {
+            // console.log('REALTIME_UPDATE');
+            break;
+        }
+        case constants.InboundMessageTypes.REALTIME_CAR_UPDATE: {
+            console.log('REALTIME_CAR_UPDATE');
+            const carIndex = reader.ReadUInt16();
+            const driverIndex = reader.ReadUInt16();
+            const gear = reader.ReadBytes(1).readUInt8(0) - 1;
+            const worldPosX = reader.ReadFloat();
+            const worldPosY = reader.ReadFloat();
+            const yaw = reader.ReadFloat();
+            const carLocation = reader.ReadBytes(1).readUInt8(0);
+            const kmh = reader.ReadUInt16();
+            const position = reader.ReadUInt16();
+            const cupPosition = reader.ReadUInt16();
+            const trackPosition = reader.ReadUInt16();
+            const splinePosition = reader.ReadFloat();
+            const laps = reader.ReadUInt16();
+            const delta = reader.ReadUInt32();
 
-            // In case this was successful, we will request the initial data
-            // RequestEntryList();
-            // RequestTrackData();
+            //TODO read laps
+            // carUpdate.BestSessionLap = ReadLap(br);
+            // carUpdate.LastLap = ReadLap(br);
+            // carUpdate.CurrentLap = ReadLap(br);
+
+            console.log({carIndex, driverIndex, gear, kmh, laps, delta});
+
+            if (browserSocket) browserSocket.emit('carstate', {gear, kmh, delta});
 
             break;
         }
         default: {
-            console.log('response message type not recognized', messageType);
+            // console.log('response message type not recognized', messageType);
         }
     }
-    //   io.sockets.emit('status', message.toString());
 });
 
-drone.on('listening', () => {
-    const address = drone.address();
+acc.on('listening', () => {
+    const address = acc.address();
     console.log(`server listening ${address.address}:${address.port}`);
 });
-
-
-// drone.bind(PORT);
-
-// function parseState(state) {
-//   return state
-//     .split(';')
-//     .map(x => x.split(':'))
-//     .reduce((data, [key, value]) => {
-//       data[key] = value;
-//       return data;
-//     }, {});
-// }
-
-// const droneState = dgram.createSocket('udp4');
-// droneState.bind(8890);
-
 
 
 function handleError(err) {
@@ -81,46 +90,21 @@ function handleError(err) {
     }
 }
 
-const requestConnection = sender.requestConnection(DISPLAY_NAME, CONNECTION_PASSWORD, COMMAND_PASSWORD);
-drone.send(requestConnection, 0, requestConnection.length, PORT, HOST, handleError);
+const requestConnection = api.requestConnection(DISPLAY_NAME, CONNECTION_PASSWORD, COMMAND_PASSWORD);
+acc.send(requestConnection, 0, requestConnection.length, PORT, HOST, handleError);
 
 io.on('connection', socket => {
     console.log('Connected from browser...');
     socket.on('command', command => {
         console.log('command Sent from browser');
         console.log(command);
-        // drone.send(command, 0, command.length, PORT, HOST, handleError);
+        //TODO here to send messages to ACC
     });
 
-    setInterval(() => socket.emit('carstate', fakeState()), 100);
+    browserSocket = socket;
 
     socket.emit('status', 'CONNECTED');
 });
-
-fakeState = () => {
-    return {
-        speed: {
-            max: 200,
-            min: 0,
-            actual: Math.random() * 200,
-        },
-        rpm: {
-            max: 9000,
-            min: 0,
-            actual: Math.random() * 9000,
-        },
-        date: new Date(),
-    }
-}
-
-// droneState.on(
-//   'message',
-//   throttle(state => {
-//       console.log('state!', state);
-//     // const formattedState = parseState(state.toString());
-//     // io.sockets.emit('dronestate', formattedState);
-//   }, 100)
-// );
 
 http.listen(6767, () => {
     console.log('Socket io server up and running');
