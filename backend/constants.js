@@ -11,7 +11,7 @@ const constants = {
         SAVE_MANUAL_REPLAY_HIGHLIGHT: 60, // TODO, but planned
     },
     broadcastingNetworkProtocol: {
-        BROADCASTING_PROTOCOL_VERSION: 2,
+        BROADCASTING_PROTOCOL_VERSION: 4,
     },
     InboundMessageTypes: {
         REGISTRATION_RESULT: 1,

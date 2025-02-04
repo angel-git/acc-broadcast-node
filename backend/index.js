@@ -47,6 +47,7 @@ acc.on('message', message => {
             console.log('REALTIME_CAR_UPDATE');
             const carIndex = reader.ReadUInt16();
             const driverIndex = reader.ReadUInt16();
+            const driverCount = reader.ReadBytes(1).readUint8(0);
             const gear = reader.ReadBytes(1).readUInt8(0) - 1;
             const worldPosX = reader.ReadFloat();
             const worldPosY = reader.ReadFloat();
